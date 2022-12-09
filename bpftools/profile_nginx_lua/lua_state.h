@@ -6,6 +6,8 @@
 #include <bpf/bpf_core_read.h>
 #include <bpf/bpf_tracing.h>
 
+#include "lua.h"
+
 #define LJ_TARGET_GC64 1
 
 /* 64 bit GC references. */
@@ -861,6 +863,52 @@ typedef struct GCState {
   MRef lightudseg;	/* Upper bits of lightuserdata segments. */
 #endif
 } GCState;
+
+/* String interning state. */
+typedef struct StrInternState {
+  GCRef *tab;		/* String hash table anchors. */
+  MSize mask;		/* String hash mask (size of hash table - 1). */
+  MSize num;		/* Number of strings in hash table. */
+  StrID id;		/* Next string ID. */
+  uint8_t idreseed;	/* String ID reseed counter. */
+  uint8_t second;	/* String interning table uses secondary hashing. */
+  uint8_t unused1;
+  uint8_t unused2;
+  LJ_ALIGN(8) uint64_t seed;	/* Random string seed. */
+} StrInternState;
+
+/* Global state, shared by all threads of a Lua universe. */
+typedef struct global_State {
+  lua_Alloc allocf;	/* Memory allocator. */
+  void *allocd;		/* Memory allocator data. */
+  GCState gc;		/* Garbage collector. */
+  GCstr strempty;	/* Empty string. */
+  uint8_t stremptyz;	/* Zero terminator of empty string. */
+  uint8_t hookmask;	/* Hook mask. */
+  uint8_t dispatchmode;	/* Dispatch mode. */
+  uint8_t vmevmask;	/* VM event mask. */
+  StrInternState str;	/* String interning. */
+  volatile int32_t vmstate;  /* VM state or current JIT code trace number. */
+  GCRef mainthref;	/* Link to main thread. */
+  SBuf tmpbuf;		/* Temporary string buffer. */
+  TValue tmptv, tmptv2;	/* Temporary TValues. */
+  Node nilnode;		/* Fallback 1-element hash part (nil key and value). */
+  TValue registrytv;	/* Anchor for registry. */
+  GCupval uvhead;	/* Head of double-linked list of all open upvalues. */
+  int32_t hookcount;	/* Instruction hook countdown. */
+  int32_t hookcstart;	/* Start count for instruction hook counter. */
+  lua_Hook hookf;	/* Hook function. */
+  lua_CFunction wrapf;	/* Wrapper for C function calls. */
+  lua_CFunction panic;	/* Called as a last resort for errors. */
+  BCIns bc_cfunc_int;	/* Bytecode for internal C function calls. */
+  BCIns bc_cfunc_ext;	/* Bytecode for external C function calls. */
+  GCRef cur_L;		/* Currently executing lua_State. */
+  MRef jit_base;	/* Current JIT code L->base or NULL. */
+  MRef ctype_state;	/* Pointer to C type state. */
+  PRNGState prng;	/* Global PRNG state. */
+  GCRef gcroot[GCROOT_MAX];  /* GC roots. */
+  MRef saved_jit_base;  /* saved jit_base for lj_err_throw */
+} global_State;
 
 #define mainthread(g)	(&gcref(g->mainthref)->th)
 #define niltv(L) \

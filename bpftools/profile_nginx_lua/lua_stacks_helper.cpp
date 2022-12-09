@@ -3,6 +3,7 @@
 
 struct lua_stack_map
 {
+    // key is user_stack_id, value is stack_backtrace obj
     std::map<int, struct stack_backtrace> map;
 };
 
@@ -26,6 +27,8 @@ int insert_lua_stack_map(struct lua_stack_map *map, const struct lua_stack_event
     auto it = map->map.find(e->user_stack_id);
     if (it == map->map.end())
     {
+        // here is to insert a new lua stack backtrace into a map
+        // indexing with user_stack_id
         struct stack_backtrace stack = {0};
         stack.stack[e->level] = *e;
         stack.level_size = e->level + 1;

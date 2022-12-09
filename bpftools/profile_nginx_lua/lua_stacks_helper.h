@@ -12,6 +12,7 @@ extern "C"
 
     struct stack_backtrace
     {
+        // level_size -> current max-depth backtrace
         int level_size;
         struct lua_stack_event stack[MAX_STACK_DEPTH];
     };
