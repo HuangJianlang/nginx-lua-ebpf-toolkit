@@ -3,6 +3,7 @@
 #include "lua_state.h"
 #include "profile.h"
 #include "maps.bpf.h"
+#include <bpf/bpf_helpers.h>
 
 const volatile bool kernel_stacks_only = false;
 const volatile bool user_stacks_only = false;
@@ -162,9 +163,13 @@ static int fix_lua_stack(struct bpf_perf_event_data *ctx, __u32 tid, int stack_i
 SEC("perf_event")
 int do_perf_event(struct bpf_perf_event_data *ctx)
 {
-	__u64 id = bpf_get_current_pid_tgid();
-	__u32 pid = id >> 32;
-	__u32 tid = id;
+	struct task_struct *task = (struct task_struct *)bpf_get_current_task();
+	struct nsproxy *namespaceproxy = BPF_CORE_READ(task, nsproxy);
+	struct pid_namespace *pid_ns_children = BPF_CORE_READ(namespaceproxy, pid_ns_for_children);
+	unsigned int level = BPF_CORE_READ(pid_ns_children, level);
+	__u32 pid = BPF_CORE_READ(task, group_leader, thread_pid, numbers[level].nr); 
+	__u32 tid = pid;
+	
 	__u64 *valp;
 	static const __u64 zero;
 	struct profile_key_t key = {};
@@ -220,9 +225,12 @@ static int probe_entry_lua_cancel(struct pt_regs *ctx)
 	if (!PT_REGS_PARM4(ctx))
 		return 0;
 
-	__u64 pid_tgid = bpf_get_current_pid_tgid();
-	__u32 pid = pid_tgid >> 32;
-	__u32 tid = (__u32)pid_tgid;
+	struct task_struct *task = (struct task_struct *)bpf_get_current_task();
+	struct nsproxy *namespaceproxy = BPF_CORE_READ(task, nsproxy);
+	struct pid_namespace *pid_ns_children = BPF_CORE_READ(namespaceproxy, pid_ns_for_children);
+	unsigned int level = BPF_CORE_READ(pid_ns_children, level);
+	__u32 pid = BPF_CORE_READ(task, group_leader, thread_pid, numbers[level].nr); 
+	__u32 tid = pid;
 
 	if (targ_pid != -1 && targ_pid != pid)
 		return 0;
@@ -241,9 +249,13 @@ static int probe_entry_lua(struct pt_regs *ctx)
 	if (!PT_REGS_PARM1(ctx))
 		return 0;
 
-	__u64 pid_tgid = bpf_get_current_pid_tgid();
-	__u32 pid = pid_tgid >> 32;
-	__u32 tid = (__u32)pid_tgid;
+	struct task_struct *task = (struct task_struct *)bpf_get_current_task();
+	struct nsproxy *namespaceproxy = BPF_CORE_READ(task, nsproxy);
+	struct pid_namespace *pid_ns_children = BPF_CORE_READ(namespaceproxy, pid_ns_for_children);
+	unsigned int level = BPF_CORE_READ(pid_ns_children, level);
+	__u32 pid = BPF_CORE_READ(task, group_leader, thread_pid, numbers[level].nr); 
+	__u32 tid = pid;
+	
 	struct lua_stack_event event = {};
 
 	if (targ_pid != -1 && targ_pid != pid)

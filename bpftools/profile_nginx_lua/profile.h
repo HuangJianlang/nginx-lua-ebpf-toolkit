@@ -5,7 +5,7 @@
 #define TASK_COMM_LEN 16
 #define MAX_CPU_NR 128
 #define MAX_ENTRIES 10240
-#define HOST_LEN 80
+#define HOST_LEN 256
 
 struct profile_key_t
 {

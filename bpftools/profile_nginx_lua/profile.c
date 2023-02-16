@@ -17,6 +17,7 @@
 #include <linux/perf_event.h>
 #include <asm/unistd.h>
 #include <bpf/libbpf.h>
+#include <sys/resource.h>
 #include <bpf/bpf.h>
 #include "profile.h"
 #include "lua_stacks_helper.h"
@@ -89,7 +90,7 @@ const char argp_program_doc[] =
 #define OPT_STACK_STORAGE_SIZE 2   /* --stack-storage-size */
 #define OPT_LUA_USER_STACK_ONLY 3  /* --lua-user-stacks-only */
 #define OPT_DISABLE_LUA_USER_TRACE 4  /* --disable-lua-user-trace */
-#define PERF_BUFFER_PAGES 16
+#define PERF_BUFFER_PAGES 64
 #define PERF_POLL_TIMEOUT_MS 100
 
 static const struct argp_option opts[] = {
@@ -273,6 +274,20 @@ static int libbpf_print_fn(enum libbpf_print_level level, const char *format, va
 	if (level == LIBBPF_DEBUG && !env.verbose)
 		return 0;
 	return vfprintf(stderr, format, args);
+}
+
+// Bump RLIMIT_MEMLOCK to allow BPF sub-system to do anything it needs.
+static void bump_memlock_rlimit(void)
+{
+	struct rlimit rlim_new = {
+		.rlim_cur = RLIM_INFINITY,
+		.rlim_max = RLIM_INFINITY,
+	};
+
+	if (setrlimit(RLIMIT_MEMLOCK, &rlim_new)) {
+		fprintf(stderr, "Failed to increase RLIMIT_MEMLOCK limit!\n");
+		exit(1);
+	}
 }
 
 static void sig_handler(int sig)
@@ -751,6 +766,7 @@ int main(int argc, char **argv)
 	}
 
 	libbpf_set_print(libbpf_print_fn);
+	bump_memlock_rlimit();
 	libbpf_set_strict_mode(LIBBPF_STRICT_ALL);
 
 	nr_cpus = libbpf_num_possible_cpus();
